@@ -114,8 +114,8 @@ function generateRegularRpcMethod(
   const params = [...(options.context ? [code`ctx: Context`] : []), code`request: ${inputType}`];
   const maybeCtx = options.context ? 'ctx,' : '';
 
-  let encode = code`${rawInputType}.encode(request).finish()`;
-  let decode = code`data => ${outputType}.decode(new ${Reader}(data))`;
+  let encode = options.clientImplUseJSON ? jsonEncodeTmpl(rawInputType) : code`${rawInputType}.encode(request).finish()`;
+  let decode = options.clientImplUseJSON ? code`data => ${jsonDecodeTmpl(outputType)}` : code`data => ${outputType}.decode(new ${Reader}(data))`;
 
   if (options.useDate && rawOutputType.toString().includes('Timestamp')) {
     decode = code`data => ${utils.fromTimestamp}(${rawOutputType}.decode(new ${Reader}(data)))`;
@@ -265,17 +265,23 @@ function generateCachingRpcMethod(
   methodDesc: MethodDescriptorProto
 ): Code {
   assertInstanceOf(methodDesc, FormattedMethodDescriptor);
+  const { options } = ctx;
   const inputType = requestType(ctx, methodDesc);
   const outputType = responseType(ctx, methodDesc);
   const uniqueIdentifier = `${maybePrefixPackage(fileDesc, serviceDesc.name)}.${methodDesc.name}`;
+
+  // different encode/decode by options.clientImplUseJSON
+  const encode = options.clientImplUseJSON ? jsonEncodeTmpl(inputType) : code`${inputType}.encode(request).finish()`;
+  const decode = options.clientImplUseJSON ? jsonDecodeTmpl(outputType) : code`${outputType}.decode(new ${Reader}(response))`;
+
   const lambda = code`
     (requests) => {
       const responses = requests.map(async request => {
-        const data = ${inputType}.encode(request).finish()
+        const data = ${encode}
         const response = await this.rpc.request(ctx, "${maybePrefixPackage(fileDesc, serviceDesc.name)}", "${
     methodDesc.name
   }", data);
-        return ${outputType}.decode(new ${Reader}(response));
+        return ${decode}
       });
       return Promise.all(responses);
     }
@@ -313,7 +319,12 @@ export function generateRpcType(ctx: Context, hasStreamingMethods: boolean): Cod
   const { options } = ctx;
   const maybeContext = options.context ? '<Context>' : '';
   const maybeContextParam = options.context ? 'ctx: Context,' : '';
-  const methods = [[code`request`, code`Uint8Array`, code`Promise<Uint8Array>`]];
+  const methods = [
+    options.clientImplUseJSON
+    ? [code`request`, code`unknown`, code`Promise<unknown>`]
+    : [code`request`, code`Uint8Array`, code`Promise<Uint8Array>`]
+  ];
+  // do not consider streaming methods for options.clientImplUseJSON
   if (hasStreamingMethods) {
     const observable = imp('Observable@rxjs');
     methods.push([code`clientStreamingRequest`, code`${observable}<Uint8Array>`, code`Promise<Uint8Array>`]);
@@ -355,4 +366,14 @@ export function generateDataLoaderOptionsType(): Code {
       cache?: boolean;
     }
   `;
+}
+
+function jsonEncodeTmpl(rawInputType: Code): Code {
+  // origin: code`${rawInputType}.encode(request).finish()`
+  return code`${rawInputType}.toJSON(request)`
+}
+
+function jsonDecodeTmpl(outputType: Code): Code {
+  // origin: code`${outputType}.decode(new ${Reader}(data))`
+  return code`${outputType}.fromJSON(data)`
 }
