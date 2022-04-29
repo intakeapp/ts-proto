@@ -1,9 +1,9 @@
 {
-  "name": "ts-proto",
-  "version": "1.110.4",
+  "name": "ts-proto-json",
+  "version": "1.0.0",
   "description": "",
   "main": "build/plugin.js",
-  "repository": "github:stephenh/ts-proto",
+  "repository": "github:intakeapp/ts-proto",
   "bin": {
     "protoc-gen-ts_proto": "./protoc-gen-ts_proto"
   },
