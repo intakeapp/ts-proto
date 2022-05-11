@@ -1,6 +1,6 @@
 {
   "name": "ts-proto-json",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "",
   "main": "build/plugin.js",
   "repository": "github:intakeapp/ts-proto",
