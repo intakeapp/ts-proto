@@ -163,7 +163,7 @@ export function addGrpcWebMisc(ctx: Context, hasStreamingMethods: boolean): Code
 function generateGrpcWebRpcType(returnObservable: boolean, hasStreamingMethods: boolean): Code {
   const chunks: Code[] = [];
 
-  chunks.push(code`interface Rpc {`);
+  chunks.push(code`export interface Rpc {`);
 
   const wrapper = returnObservable ? Observable : 'Promise';
   chunks.push(code`
