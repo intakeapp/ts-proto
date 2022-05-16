@@ -1,18 +1,13 @@
-import { MethodDescriptorProto, FileDescriptorProto, ServiceDescriptorProto } from 'ts-proto-descriptors';
 import { Code, code, imp, joinCode } from 'ts-poet';
+import { MethodDescriptorProto, FileDescriptorProto, ServiceDescriptorProto } from 'ts-proto-descriptors';
+
+import { Context } from './context';
+import { contextTypeVar } from './main';
+import SourceInfo, { Fields } from './sourceInfo';
 import {
-  BatchMethod,
-  detectBatchMethod,
-  requestType,
-  rawRequestType,
-  responsePromiseOrObservable,
-  responseType,
+  BatchMethod, detectBatchMethod, requestType, rawRequestType, responsePromiseOrObservable, responseType,
 } from './types';
 import { assertInstanceOf, FormattedMethodDescriptor, maybeAddComment, maybePrefixPackage, singular } from './utils';
-import SourceInfo, { Fields } from './sourceInfo';
-import { camelCase } from './case';
-import { contextTypeVar } from './main';
-import { Context } from './context';
 
 const hash = imp('hash*object-hash');
 const dataloader = imp('DataLoader*dataloader');
@@ -148,10 +143,13 @@ function generateRegularRpcMethod(
       ${joinCode(params, { on: ',' })}
     ): ${responsePromiseOrObservable(ctx, methodDesc)} {
       const data = ${encode};
+      const methodInfo = this.gw['${methodDesc.name}'];
       const ${returnVariable} = this.rpc.${rpcMethod}(
         ${maybeCtx}
         "${maybePrefixPackage(fileDesc, serviceDesc.name)}",
         "${methodDesc.name}",
+        methodInfo.method,
+        methodInfo.path,
         data
       );
       return ${decode};
@@ -176,7 +174,12 @@ export function generateServiceClientImpl(
   // Create the constructor(rpc: Rpc)
   const rpcType = options.context ? 'Rpc<Context>' : 'Rpc';
   chunks.push(code`private readonly rpc: ${rpcType};`);
+  const gwName = fileDesc.name.split('.')[0] + '.gw';
+  const serviceType = imp(`ServiceInfo@./${gwName}`);
+  chunks.push(code`private readonly gw: ${serviceType};`);
   chunks.push(code`constructor(rpc: ${rpcType}) {`);
+  const services = imp(`services@./${gwName}`);
+  chunks.push(code`this.gw = ${services}['${maybePrefixPackage(fileDesc, serviceDesc.name)}'];`);
   chunks.push(code`this.rpc = rpc;`);
   // Bind each FooService method to the FooServiceImpl class
   for (const methodDesc of serviceDesc.method) {
@@ -343,6 +346,8 @@ export function generateRpcType(ctx: Context, hasStreamingMethods: boolean): Cod
         ${maybeContextParam}
         service: string,
         method: string,
+        httpMethod: string,
+        path: string,
         data: ${method[1]}
       ): ${method[2]};`);
   });
